@@ -1,26 +1,62 @@
 # -*- coding: utf-8 -*-
 """Builds the static site from docs/*.md.  Run:  python3 build.py"""
-import re, html, datetime, pathlib
+import re, html, pathlib
 import markdown
 
 ROOT = pathlib.Path(__file__).parent
 DOCS = ROOT / "docs"
-TODAY = "29.9.2026"
+TODAY = "1.10.2026"
 
+# Reading order of the site: letter and summary, then constitution -> guidelines -> the three laws -> 100 days; disputes cover all.
+# title=None takes the document's own H1.
 PAGES = [
-    # slug, md file, nav label, page title, lede, pdf name
-    ("letter", "letter.md", "מכתב הסבר", "מכתב הסבר — החוקה והתהליך שמאחוריה", "למה חוקה ולמה עכשיו, איך נוסח המסמך, עיקרי החוקה ומה הלאה.", "מכתב-הסבר.pdf"),
-    ("summary", "summary.md", "תקציר", "תקציר החוקה", "עמוד אחד: מה המסמך, מבנה החוקה פרק-פרק, ומה נשאר להכרעה.", "תקציר-החוקה.pdf"),
-    ("constitution", "constitution.md", "החוקה", "חוקה למדינת ישראל — טיוטה", "100 סעיפים ב-12 פרקים, ונספח מקורות המציין לכל סעיף על איזו עמדה מפלגתית הוא נשען.", "חוקה-טיוטה.pdf"),
-    ("disputes", "disputes.md", "מחלוקות וחלופות", "מחלוקות וחלופות — מה לא נכנס לחוקה ולמה", "כל נושא שנוי במחלוקת: עמדת כל מפלגה עם מקור, הנוסח שנבחר, החלופות, ורשימת ההכרעות הנדרשות.", "מחלוקות-וחלופות.pdf"),
+    dict(slug="letter", md="letter.md", label="מכתב הסבר", title=None,
+         lede="על מה המסמכים, איך נוסחו, עיקרי התוצרים ומה הלאה — בשפה לא משפטית.", pdf="מכתב-הסבר.pdf"),
+    dict(slug="summary", md="summary.md", label="תקציר", title=None,
+         lede="עמוד אחד: כל תוצר במבט אחד, עיקרי החוקה ומה נשאר להכרעת ראשי המפלגות.", pdf="תקציר-החוקה.pdf"),
+    dict(slug="constitution", md="constitution.md", label="החוקה", title="חוקה למדינת ישראל — טיוטה",
+         lede="100 סעיפים ב-12 פרקים, ונספח מקורות המציין לכל סעיף על איזו עמדה מפלגתית הוא נשען.", pdf="חוקה-טיוטה.pdf"),
+    dict(slug="guidelines", md="guidelines.md", label="קווי היסוד", title=None,
+         lede="68 סעיפים — מבוא, חמישה פרקי ליבה ושבעה פרקי תחום — עם רמת ההסכמה על כל סעיף, מה לא נכלל ולמה, ונספח מקורות.", pdf="קווי-היסוד-לממשלה.pdf"),
+    dict(slug="term-limits", md="term-limits.md", label="הגבלת כהונה", group="laws", title=None,
+         lede="נוסח ההצעה, דברי הסבר, הכרעות ניסוח, ההתאמות בחוקה, נקודות פתוחות ונספח מקורות.", pdf="הצעת-חוק-יסוד-הגבלת-כהונה.pdf"),
+    dict(slug="inquiry", md="inquiry.md", label="ועדת חקירה", group="laws", title=None,
+         lede="טיוטת החלטת ממשלה לפי חוק ועדות חקירה, נוסחים חלופיים, הצעת חוק ייעודית כחלופה, דברי הסבר ונספח מקורות.", pdf="ועדת-חקירה-ממלכתית.pdf"),
+    dict(slug="equal-burden", md="equal-burden.md", label="שוויון בנטל", group="laws", title=None,
+         lede="הצעת חוק שירות ממלכתי: 32 סעיפים ותוספת, דברי הסבר, הכרעות ניסוח, נקודות פתוחות ונספח מקורות.", pdf="הצעת-חוק-השוויון-בנטל.pdf"),
+    dict(slug="deferral-decision", md="deferral-decision.md", label="ההכרעה על היקף הדחייה", group="laws", title=None,
+         lede="תוצאות המשא ומתן בין נציגי ארבע המפלגות על חוק השוויון בנטל: הנוסח המוסכם, ההכרעה בדחייה בשל לימוד תורה ומצוינות, החלופות שנרשמו והאישורים החסרים.", pdf="הכרעה-היקף-הדחייה.pdf"),
+    dict(slug="100-days", md="100-days.md", label="100 הימים", title=None,
+         lede="29 פעולות, משלב 0 (מהבחירות ועד כינון הממשלה) ועד יום 100 — לכל פעולה מועד ומקור — ומה לא נכלל ולמה.", pdf="תוכנית-100-הימים.pdf"),
+    dict(slug="disputes", md="disputes.md", label="מחלוקות", title="מחלוקות וחלופות — בכל התוצרים",
+         lede="כל נושא שנוי במחלוקת: עמדת כל מפלגה עם מקור, הנוסח שנבחר, החלופות, ורשימת ההכרעות הנדרשות מראשי המפלגות.", pdf="מחלוקות-וחלופות.pdf"),
+]
+PAGE = {p["slug"]: p for p in PAGES}
+NAV = [("index", "בית"), ("letter", "מכתב הסבר"), ("summary", "תקציר"), ("constitution", "החוקה"),
+       ("guidelines", "קווי היסוד"), ("laws", "שלושת החוקים"), ("100-days", "100 הימים"), ("disputes", "מחלוקות")]
+LAWS = [  # slug, kind, short name, what it sets (from the summary)
+    ("term-limits", "הצעת חוק-יסוד", "הגבלת כהונת ראש הממשלה",
+     "שמונה שנים או שתי תקופות כהונה מלאות, לפי הארוך מביניהם; צינון של שמונה שנים וחסימת עקיפה; שריון ברוב 80."),
+    ("inquiry", "טיוטת החלטת ממשלה", "ועדת חקירה ממלכתית לטבח 7 באוקטובר",
+     "ההחלטה הראשונה של הממשלה, לפי חוק ועדות חקירה; מה שקדם לטבח, הטבח והמלחמה שבעקבותיו; החברים — בידי נשיא בית המשפט העליון."),
+    ("equal-burden", "הצעת חוק", "חוק השוויון בנטל",
+     "חובת שירות צבאי או אזרחי לכל, בלי פטור קבוצתי ובלי מכסות; לימוד תורה במסלול בתוך השירות; סנקציות בכפוף לפסקת ההגבלה."),
 ]
 
+
+def group_of(slug):
+    return PAGE.get(slug, {}).get("group", slug)
+
+
 def nav(current):
-    items = ['<a href="index.html"%s>בית</a>' % (' aria-current="page"' if current == "index" else "")]
-    for slug, _, label, *_ in PAGES:
-        cur = ' aria-current="page"' if slug == current else ""
-        items.append('<a href="%s.html"%s>%s</a>' % (slug, cur, label))
-    return '<header class="topbar"><div class="topbar-inner"><a class="brand" href="index.html">חוקה ברוח מסמך העקרונות</a><nav class="nav">%s</nav></div></header>' % "".join(items)
+    cur_group = "laws" if current == "laws" else group_of(current)
+    items = []
+    for slug, label in NAV:
+        href = "index.html" if slug == "index" else slug + ".html"
+        cur = ' aria-current="page"' if slug == cur_group else ""
+        items.append('<a href="%s"%s>%s</a>' % (href, cur, label))
+    return '<header class="topbar"><div class="topbar-inner"><a class="brand" href="index.html">החוקה ותוצרי קבוצה ב\'</a><nav class="nav">%s</nav></div></header>' % "".join(items)
+
 
 def shell(title, body, current, description=""):
     return f'''<!doctype html>
@@ -35,45 +71,75 @@ def shell(title, body, current, description=""):
 <body>
 {nav(current)}
 {body}
-<footer>טיוטה לדיון, {TODAY}. נוסחה מתוך המצעים, העקרונות וההצהרות הפומביות של ביחד, ישראל ביתנו, הדמוקרטים וישר!, ברוח מסמך העקרונות של ראשי המפלגות מיום 26.9.2026. אינה נוסח סופי ואינה מחייבת את המפלגות.</footer>
+<footer>טיוטות לדיון, {TODAY}. נוסחו מתוך המצעים, העקרונות וההצהרות הפומביות של ביחד, ישראל ביתנו, הדמוקרטים וישר!, ברוח מסמך העקרונות של ראשי המפלגות מיום 26.9.2026. אינן נוסח סופי ואינן מחייבות את המפלגות.</footer>
 </body>
 </html>'''
 
-XREF = re.compile(r"(?<![\w-])(סעיפים|סעיף|ס')\s+(\d{1,3})((?:\([א-ת]\))?(?:\(\d+\))?)")
-CHAIN = re.compile(r"(?<=[,\s])(ו-|-)?(\d{1,3})(\([א-ת]\))?(?=[,\s.;:)]|$)")
 
-def link_sections(fragment, prefix):
-    """Turn 'סעיף 23', 'ס' 92(א)' and chains like 'סעיפים 43 ו-92' into links to #s-N."""
-    out = []
-    pos = 0
+# ---------- cross-references to constitution sections ----------
+# "סעיף 23", "ס' 92(א)", "סעיפים 43 ו-92" — but not "ס' 6א", "סעיף 0.4".
+XREF = re.compile(r"(?<![\w-])(סעיפים|סעיף|ס')\s+(\d{1,3})(?!\d)(?!\.\d)(?![א-ת])((?:\([א-ת]\))?(?:\(\d+\))?)")
+CHAIN = re.compile(r"((?:,\s*|\s+ו-)\d{1,3}(?!\d)(?!\.\d)(?![א-ת])(?:\([א-ת]\))?)+")
+RANGE = r"(?:[–-]\d{1,3}(?:\([א-ת]\))?)?"
+# a reference followed by another instrument ("ס' 14 להצעת החוק", "ס' 46 לחוק שירות ביטחון") is not to the constitution
+NOT_CONST_AFTER = re.compile(r"^" + RANGE + r"\s+(?:ל|ב|של\s+)(?:חוק(?!ה)|הצעת|הצעה|ההצעה|החלטה|ההחלטה|קווי|תוכנית|פקודת|תקנון|מתווה|מסמך|נוסח)")
+# ... and so is one that directly follows a law's name ("חוק יסוד: הכנסת ס' 4")
+NOT_CONST_BEFORE = re.compile(r"(?:חוק[- ]יסוד:?[^;()|,.]{0,40}|חוק [^;()|,.]{2,40}|פקודת [^;()|,.]{2,30}|תקנון הכנסת)\s*$")
+# in documents other than the constitution family, link only what is explicitly the constitution
+CONST_AFTER = re.compile(r"^" + RANGE + r"\s+(?:ל|ב)(?:טיוטת\s+)?(?:ה)?חוקה(?![א-ת])")
+
+
+def is_const_ref(before, tail, mode):
+    if mode == "strict":
+        return bool(CONST_AFTER.match(tail))
+    if NOT_CONST_AFTER.match(tail):
+        return False
+    if mode == "default" and NOT_CONST_BEFORE.search(before[-60:]):
+        return False
+    return True
+
+
+def link_sections(fragment, prefix, mode):
+    """Turn constitution references into links to #s-N. mode: internal (constitution text), default, strict."""
+    out, pos = [], 0
     for m in XREF.finditer(fragment):
-        out.append(fragment[pos:m.start()])
+        if m.start() < pos:
+            continue
         word, num, sub = m.group(1), m.group(2), m.group(3)
-        out.append('%s <a class="xref" href="%s#s-%s">%s%s</a>' % (word, prefix, num, num, sub))
-        pos = m.end()
+        chain = ""
         if word == "סעיפים":
-            # continue the chain: ", 38(ד) ו-52(ב)"
-            tail = fragment[pos:]
-            cm = re.match(r"((?:,\s*|\s+ו-)\d{1,3}(?:\([א-ת]\))?)+", tail)
+            cm = CHAIN.match(fragment[m.end():])
             if cm:
                 chain = cm.group(0)
-                chain = re.sub(r"(\d{1,3})(\([א-ת]\))?", lambda x: '<a class="xref" href="%s#s-%s">%s%s</a>' % (prefix, x.group(1), x.group(1), x.group(2) or ""), chain)
-                out.append(chain)
-                pos += cm.end()
+        tail = fragment[m.end() + len(chain):]
+        if not is_const_ref(fragment[:m.start()], tail, mode):
+            continue
+        out.append(fragment[pos:m.start()])
+        out.append('%s <a class="xref" href="%s#s-%s">%s%s</a>' % (word, prefix, num, num, sub))
+        if chain:
+            out.append(re.sub(r"(\d{1,3})(\([א-ת]\))?", lambda x: '<a class="xref" href="%s#s-%s">%s%s</a>' % (prefix, x.group(1), x.group(1), x.group(2) or ""), chain))
+        pos = m.end() + len(chain)
     out.append(fragment[pos:])
     return "".join(out)
 
-def linkify(html_text, prefix):
-    # only outside tags
+
+def text_parts(html_text, fn):
     parts = re.split(r"(<[^>]+>)", html_text)
-    return "".join(p if p.startswith("<") else link_sections(p, prefix) for p in parts)
+    return "".join(p if p.startswith("<") else fn(p) for p in parts)
+
+
+def linkify(html_text, prefix, mode="default"):
+    return text_parts(html_text, lambda p: link_sections(p, prefix, mode))
+
 
 def md_to_html(text):
     md = markdown.Markdown(extensions=["tables", "sane_lists"])
     return md.convert(text)
 
+
 def wrap_tables(h):
     return h.replace("<table>", '<div class="table-wrap"><table>').replace("</table>", "</table></div>")
+
 
 def pills(h):
     h = h.replace("הכרעה נדרשת", '<span class="pill open">הכרעה נדרשת</span>')
@@ -82,6 +148,26 @@ def pills(h):
     h = re.sub(r"<li>\[x\] ", '<li><span class="pill done">הוכרע</span> ', h)
     h = re.sub(r"<li>\[ \] ", '<li><span class="pill open">פתוח</span> ', h)
     return h
+
+
+# agreement tags used in the guidelines, the laws and the 100-day plan: [4/4], [3+], [צר], [גישור] ...
+TAG = re.compile(r"\[(4/4[^\[\]]{0,24}|3\+|צר|גישור|הצעת גישור|טכני|סטטוס קוו|הליך)\]")
+TAG_LVL = {"4": "all4", "3": "three", "צ": "narrow", "ג": "bridge", "ה": "sq", "ט": "bridge", "ס": "sq"}
+
+
+def tag_fragment(t):
+    t = t.replace("[הכרעה נדרשת]", "הכרעה נדרשת")
+    t = re.sub(r"\[(הוכרע במטה(?: \([^\[\]]{1,40}\))?)\]", r'<span class="pill done">\1</span>', t)
+    def rep(m):
+        txt = m.group(1)
+        lvl = "bridge" if txt.startswith("הצעת") else ("sq" if txt == "הליך" else TAG_LVL.get(txt[0], "sq"))
+        return '<span class="tag lvl-%s"><span class="dot" aria-hidden="true"></span>%s</span>' % (lvl, txt)
+    return TAG.sub(rep, t)
+
+
+def tags(h):
+    return text_parts(h, tag_fragment)
+
 
 # ---------- data: agreement levels, parties, disputes cross-links ----------
 LEVELS = [
@@ -101,6 +187,7 @@ PARTIES = [
 
 LEVEL_ORDER = [k for k, _, _ in LEVELS]
 
+
 def levels_in(level_text):
     """All agreement levels a section's parts carry, strongest first."""
     t, s = level_text, set()
@@ -110,6 +197,7 @@ def levels_in(level_text):
     if "גישור" in t: s.add("bridge")
     if "סטטוס קוו" in t or "הפניה" in t or not s: s.add("sq")
     return [k for k in LEVEL_ORDER if k in s]
+
 
 def parties_in(sources):
     found = []
@@ -121,15 +209,21 @@ def parties_in(sources):
                 found.append(key)
     return found
 
+
 def extract_refs(text):
     nums = set()
     for m in XREF.finditer(text):
-        nums.add(int(m.group(2)))
+        chain = ""
         if m.group(1) == "סעיפים":
-            cm = re.match(r"((?:,\s*|\s+ו-)\d{1,3}(?:\([א-ת]\))?)+", text[m.end():])
+            cm = CHAIN.match(text[m.end():])
             if cm:
-                nums.update(int(x) for x in re.findall(r"\d{1,3}", cm.group(0)))
+                chain = cm.group(0)
+        if not is_const_ref(text[:m.start()], text[m.end() + len(chain):], "default"):
+            continue
+        nums.add(int(m.group(2)))
+        nums.update(int(x) for x in re.findall(r"\d{1,3}", chain))
     return nums
+
 
 def load_sections(text):
     """Section number -> dict(title, chapter, what, sources, level_text, lvl, parties)."""
@@ -157,7 +251,9 @@ def load_sections(text):
             secs[n]["lvl"] = secs[n]["lvls"][0]
     return secs, chapters
 
+
 EXCL_DISPUTES = {"איך נקבע המכנה המשותף ומה נדרש להכרעה", "טבלת המחלוקות במבט אחד", "הכרעות נדרשות מראשי המפלגות"}
+
 
 def disputes_index(text):
     """Heading ids d-1.. in document order, and section -> [(id, title)] for headings whose text cites it."""
@@ -178,6 +274,7 @@ def disputes_index(text):
     flush()
     return refmap
 
+
 def id_headings(h):
     counter = [0]
     def rep(m):
@@ -185,16 +282,20 @@ def id_headings(h):
         return '<h%s id="d-%d">' % (m.group(1), counter[0])
     return re.sub(r"<h([23])>", rep, h)
 
+
 def dot(lvl):
     return '<span class="dot lvl-%s" aria-hidden="true"></span>' % lvl
+
 
 def tone(s):
     l = s.get("lvls", ["sq"])
     return "--c1:var(--l-%s);--c2:var(--l-%s)" % (l[0], l[-1])
 
+
 def lvl_text(s):
     l = s.get("lvls", ["sq"])
     return LEVEL_LABEL[l[0]] if len(l) == 1 else "%s / %s" % (LEVEL_LABEL[l[0]], LEVEL_LABEL[l[-1]])
+
 
 def agreement_map(secs, chapters, href_prefix):
     rows = []
@@ -210,6 +311,7 @@ def agreement_map(secs, chapters, href_prefix):
                     % (href_prefix, key, html.escape(full), short, html.escape(full.split(" — ")[1]), "".join(cells)))
     return '<div class="map" role="group" aria-label="מפת ההסכמה">%s</div>' % "".join(rows)
 
+
 def legend(secs, as_buttons):
     counts = {k: sum(1 for s in secs.values() if k in s["lvls"]) for k, _, _ in LEVELS}
     items = []
@@ -220,6 +322,7 @@ def legend(secs, as_buttons):
         else:
             items.append('<span class="chip static" title="%s">%s</span>' % (html.escape(desc), inner))
     return "".join(items), counts
+
 
 def build_constitution(text, secs, chapters, refmap):
     body_md = text.split("\n", 1)[1]  # drop H1
@@ -237,7 +340,7 @@ def build_constitution(text, secs, chapters, refmap):
     h = h.replace('<h2>מבוא</h2>', '<h2 id="preamble">מבוא</h2>')
     h = re.sub(r"<h2>(פרק ([א-ת\"']+) — [^<]+)</h2>", lambda m: '<h2 id="ch-%s">%s</h2>' % (m.group(2).replace('"', '').replace("'", ""), m.group(1)), h)
     h = re.sub(r'(<h2 id="preamble">מבוא</h2>\s*)<p>', r'\1<p class="preamble">', h)
-    h = linkify(h, "")
+    h = linkify(h, "", "internal")
     # source panel after each section
     def panel(m):
         n = int(m.group(2))
@@ -272,59 +375,112 @@ def build_constitution(text, secs, chapters, refmap):
 </section>"""
     return rail, mobile, explorer, h, ah
 
+
+def doc_title(text):
+    first = text.split("\n", 1)[0]
+    return first[2:].strip() if first.startswith("# ") else ""
+
+
 def build_generic(text, slug):
     body_md = text.split("\n", 1)[1]
-    h = md_to_html(body_md)
-    if slug == "disputes":
-        h = id_headings(h)
-    h = wrap_tables(pills(linkify(h, "constitution.html")))
-    return h
+    h = id_headings(md_to_html(body_md))
+    mode = "default" if slug in ("letter", "summary", "disputes") else "strict"
+    h = wrap_tables(pills(tags(linkify(h, "constitution.html", mode))))
+    heads = re.findall(r'<h2 id="(d-\d+)">(.+?)</h2>', h)
+    toc = ""
+    if len(heads) >= 4:
+        toc = '<details class="toc no-print"><summary>תוכן העניינים</summary><ol>%s</ol></details>' % "".join(
+            '<li><a href="#%s">%s</a></li>' % (i, re.sub(r"<[^>]+>", "", t)) for i, t in heads)
+    return toc + h
+
+
+def law_subnav(current):
+    items = ['<a href="laws.html">שלושת החוקים</a>']
+    for slug, kind, name, _ in LAWS:
+        cur = ' aria-current="page"' if slug == current else ""
+        items.append('<a href="%s.html"%s>%s</a>' % (slug, cur, PAGE[slug]["label"]))
+    cur = ' aria-current="page"' if current == "deferral-decision" else ""
+    items.append('<a href="deferral-decision.html"%s>%s</a>' % (cur, PAGE["deferral-decision"]["label"]))
+    return '<nav class="subnav no-print" aria-label="שלושת החוקים">%s</nav>' % "".join(items)
+
 
 def page_meta(pdf):
     return '<div class="meta"><span>טיוטה לדיון · %s</span><a class="pdf" href="pdf/%s" download>הורדה כ-PDF</a></div>' % (TODAY, pdf)
 
+
 def write(name, content):
     (ROOT / name).write_text(content, encoding="utf-8")
 
-CONST_TEXT = (DOCS / "constitution.md").read_text(encoding="utf-8")
-DISP_TEXT = (DOCS / "disputes.md").read_text(encoding="utf-8")
-SECS, CHAPTERS = load_sections(CONST_TEXT)
-REFMAP = disputes_index(DISP_TEXT)
 
-for slug, fname, label, title, lede, pdf in PAGES:
-    text = (DOCS / fname).read_text(encoding="utf-8")
-    if slug == "constitution":
-        rail, mobile, explorer, h, ah = build_constitution(text, SECS, CHAPTERS, REFMAP)
-        body = f'<main class="page with-rail">{rail}<article class="doc legal"><h1>{title}</h1><p class="lede">{lede}</p>{page_meta(pdf)}{explorer}{mobile}{h}{ah}</article></main><div class="toast" id="toast" role="status" hidden></div><script src="assets/app.js" defer></script>'
-    else:
-        h = build_generic(text, slug)
-        body = f'<main class="page"><article class="doc"><h1>{title}</h1><p class="lede">{lede}</p>{page_meta(pdf)}{h}</article></main>'
-    write(slug + ".html", shell(title, body, slug, lede))
+def card(num, slug, label, desc, extra=""):
+    p = PAGE[slug]
+    num_html = f'<span class="num">{num}</span>' if num else ""
+    return (f'<div class="card">{num_html}<h3><a href="{slug}.html">{label}</a></h3><p>{desc}</p>{extra}'
+            f'<div class="links"><a href="{slug}.html">לקריאה</a><a href="pdf/{p["pdf"]}" download>PDF</a></div></div>')
 
-# --- home ---
-disp = DISP_TEXT
-open_n = disp.count("- [ ] ")
-done_n = disp.count("- [x] ")
-cards = ""
-home_legend, _ = legend(SECS, False)
-home_map = agreement_map(SECS, CHAPTERS, "constitution.html")
-for i, (slug, fname, label, title, lede, pdf) in enumerate(PAGES, 1):
-    cards += f'<div class="card"><span class="num">מסמך {i}</span><h2><a href="{slug}.html">{label}</a></h2><p>{lede}</p><div class="links"><a href="{slug}.html">לקריאה</a><a href="pdf/{pdf}" download>PDF</a></div></div>'
-home = f'''<main class="page" style="grid-template-columns: minmax(0, 1120px)">
+
+def main():
+    const_text = (DOCS / "constitution.md").read_text(encoding="utf-8")
+    disp_text = (DOCS / "disputes.md").read_text(encoding="utf-8")
+    secs, chapters = load_sections(const_text)
+    refmap = disputes_index(disp_text)
+
+    for p in PAGES:
+        slug = p["slug"]
+        text = (DOCS / p["md"]).read_text(encoding="utf-8")
+        title = p["title"] or doc_title(text)
+        p["full_title"] = title
+        if slug == "constitution":
+            rail, mobile, explorer, h, ah = build_constitution(text, secs, chapters, refmap)
+            body = f'<main class="page with-rail">{rail}<article class="doc legal"><h1>{title}</h1><p class="lede">{p["lede"]}</p>{page_meta(p["pdf"])}{explorer}{mobile}{h}{ah}</article></main><div class="toast" id="toast" role="status" hidden></div><script src="assets/app.js" defer></script>'
+        else:
+            h = build_generic(text, slug)
+            sub = law_subnav(slug) if p.get("group") == "laws" else ""
+            body = f'<main class="page"><article class="doc">{sub}<h1>{title}</h1><p class="lede">{p["lede"]}</p>{page_meta(p["pdf"])}{h}</article></main>'
+        write(slug + ".html", shell(title, body, slug, p["lede"]))
+
+    # --- the three laws: hub page ---
+    law_cards = "".join(card(kind, slug, name, desc) for slug, kind, name, desc in LAWS)
+    law_cards += card("מסמך נלווה לחוק השוויון בנטל", "deferral-decision", PAGE["deferral-decision"]["label"], PAGE["deferral-decision"]["lede"])
+    laws_lede = "שלושת התוצרים המשפטיים של קבוצה ב'. לפי תוכנית 100 הימים, ביום הראשון שלה תחליט הממשלה על ועדת החקירה ותאשר את הצעת חוק הגבלת הכהונה ואת הצעת חוק השוויון בנטל."
+    laws_body = f'<main class="page" style="grid-template-columns: minmax(0, 1120px)"><section class="hero"><h1>שלושת החוקים</h1><p>{laws_lede}</p></section><div class="cards">{law_cards}</div></main>'
+    write("laws.html", shell("שלושת החוקים", laws_body, "laws", laws_lede))
+
+    # --- home ---
+    open_n = disp_text.count("- [ ] ")
+    done_n = disp_text.count("- [x] ")
+    guide_n = len(re.findall(r"^\*\*\d{1,2}\.\d{1,2}\*\*", (DOCS / "guidelines.md").read_text(encoding="utf-8"), flags=re.M))
+    home_legend, _ = legend(secs, False)
+    home_map = agreement_map(secs, chapters, "constitution.html")
+    start = card("", "letter", "מכתב הסבר", PAGE["letter"]["lede"]) + card("", "summary", "תקציר", PAGE["summary"]["lede"])
+    law_links = '<ul class="card-list">%s</ul>' % "".join('<li><a href="%s.html">%s</a> <span>· %s</span></li>' % (s, n, k) for s, k, n, _ in LAWS)
+    order = (card("1", "constitution", "החוקה", PAGE["constitution"]["lede"])
+             + card("2", "guidelines", "קווי היסוד לממשלה", "המבוא, חמשת פרקי הליבה — חוקה, ועדת חקירה, שוויון בנטל, הגבלת כהונה ו-100 הימים — ושבעה פרקי תחום.")
+             + f'<div class="card"><span class="num">3</span><h3><a href="laws.html">שלושת החוקים</a></h3><p>הנוסחים שהממשלה תביא ביום הראשון שלה.</p>{law_links}<div class="links"><a href="laws.html">לכל השלושה</a></div></div>'
+             + card("4", "100-days", "תוכנית 100 הימים", PAGE["100-days"]["lede"]))
+    across = card("לכל התוצרים", "disputes", "מחלוקות וחלופות", PAGE["disputes"]["lede"])
+    home = f'''<main class="page" style="grid-template-columns: minmax(0, 1120px)">
 <section class="hero">
-<div class="stamp">טיוטה לדיון · {TODAY}</div>
-<h1>חוקה למדינת ישראל ברוח מסמך העקרונות של ראשי מפלגות התיקון והתקווה</h1>
-<p>ביום 26.9.2026 הסכימו ראשי ביחד, ישראל ביתנו, הדמוקרטים וישר! שקבוצת עבודה אחת תנסח חוקה. הטיוטה כאן נבנתה אך ורק מהמצעים, מהעקרונות ומההצהרות הפומביות של ארבע המפלגות: מה שמוסכם נכנס, מה ששנוי במחלוקת נוסח לפי המכנה המשותף הצר או הופנה לחוק, ומה שאין עליו עמדה נשאר כדין הקיים.</p>
+<div class="stamp">טיוטות לדיון · {TODAY}</div>
+<h1>החוקה ותוצרי קבוצה ב', ברוח מסמך העקרונות של ראשי מפלגות התיקון והתקווה</h1>
+<p>מסמך העקרונות של ראשי ביחד, ישראל ביתנו, הדמוקרטים וישר! (26.9.2026) הטיל על קבוצה ב' לגבש את קווי היסוד לממשלה הבאה, ובהם חוק השוויון בנטל, ועדת חקירה ממלכתית לטבח השבעה באוקטובר, הגבלת כהונה לראש הממשלה, חוקה ותוכנית פעולה ל-100 הימים הראשונים. המסמכים כאן נוסחו אך ורק מתוך העמדות הפומביות של ארבע המפלגות, ולכל סעיף יש מקור.</p>
+<p>מה שמוסכם על כל הארבע, או על שלוש כשהרביעית אינה מתנגדת, נכנס כנוסח מחייב. מה ששנוי במחלוקת נוסח לפי המכנה המשותף הצר או הופנה לחוק, והחלופות נרשמו. מה שאין עליו עמדה של אף מפלגה נשאר כדין הקיים.</p>
 </section>
 <div class="facts">
-<div class="fact"><b>100</b><span>סעיפים ב-12 פרקים</span></div>
-<div class="fact"><b>4</b><span>מפלגות — כל סעיף עם מקור</span></div>
+<div class="fact"><b>100</b><span>סעיפים בחוקה</span></div>
+<div class="fact"><b>{guide_n}</b><span>סעיפים בקווי היסוד</span></div>
+<div class="fact"><b>3</b><span>נוסחים משפטיים: שתי הצעות חוק והחלטת ממשלה</span></div>
+<div class="fact"><b>29</b><span>פעולות בתוכנית 100 הימים</span></div>
 <div class="fact"><b>{open_n}</b><span>הכרעות פתוחות לראשי המפלגות</span></div>
 <div class="fact"><b>{done_n}</b><span>הכרעות שכבר התקבלו</span></div>
 </div>
-<div class="cards">{cards}</div>
+<h2 class="home-h">להתחיל כאן</h2>
+<div class="cards cards-2">{start}</div>
+<h2 class="home-h">המסמכים, לפי הסדר</h2>
+<div class="cards cards-4">{order}</div>
+<div class="cards cards-1">{across}</div>
 <section class="home-map">
-<h2>מפת ההסכמה</h2>
+<h2>מפת ההסכמה בחוקה</h2>
 <p>כל ריבוע הוא סעיף בחוקה, צבוע לפי רמת ההסכמה עליו. ריבוע בשני צבעים הוא סעיף שחלקיו ברמות שונות, למשל סעיף קטן (א) מוסכם על כל 4 וסעיף קטן (ב) לפי מכנה צר; לכן סעיף נספר בכל רמה שמופיעה בו. לחיצה פותחת את הסעיף עם המקורות.</p>
 <div class="chips">{home_legend}</div>
 {home_map}
@@ -332,14 +488,18 @@ home = f'''<main class="page" style="grid-template-columns: minmax(0, 1120px)">
 <section class="method">
 <h2>איך לקרוא</h2>
 <ol>
-<li><a href="letter.html">מכתב ההסבר</a> — למה חוקה ולמה עכשיו, איך נוסחה ועיקרי הדברים, בשפה לא משפטית.</li>
-<li><a href="summary.html">התקציר</a> — עמוד אחד עם מבנה החוקה פרק-פרק ומה נשאר להכרעה.</li>
-<li><a href="constitution.html">החוקה</a> עצמה: כל סעיף ממוספר, ההפניות בין סעיפים לחיצות, ובסוף נספח מקורות עם רמת ההסכמה על כל סעיף.</li>
+<li><a href="letter.html">מכתב ההסבר</a> ו<a href="summary.html">התקציר</a> — כל התוצרים במבט אחד, בשפה לא משפטית.</li>
+<li><a href="constitution.html">החוקה</a>: כל סעיף ממוספר, ההפניות בין סעיפים לחיצות, ולכל סעיף — מקורות ורמת הסכמה.</li>
+<li><a href="guidelines.html">קווי היסוד</a>, <a href="laws.html">שלושת החוקים</a> ו<a href="100-days.html">תוכנית 100 הימים</a>: ליד כל סעיף מסומנת רמת ההסכמה עליו (4/4, 3+, צר, גישור), ובסוף כל מסמך — נספח מקורות.</li>
 <li><a href="disputes.html">מסמך המחלוקות</a>: לכל נושא — עמדת כל מפלגה עם מקור ותאריך, הנוסח שנבחר, החלופות, ובסוף רשימת ההכרעות.</li>
 </ol>
 <h2>מה זה לא</h2>
-<p>לא נוסח סופי ולא מסמך מטעם המפלגות. חלק מהעמדות לקוח מתשובות לשאלוני עיתונים ומראיונות, לא מהתחייבויות מחייבות; כל ציטוט מובא עם הדובר, המקור והתאריך. תיקונים והערות — דרך הריפו ב-GitHub.</p>
+<p>לא נוסח סופי ולא מסמך מטעם המפלגות. ההכרעות שהתקבלו במטה מסומנות, וכולן טעונות אישור ראשי המפלגות. חלק מהעמדות לקוח מתשובות לשאלוני עיתונים ומראיונות, לא מהתחייבויות מחייבות; כל ציטוט מובא עם הדובר, המקור והתאריך. תיקונים והערות — דרך הריפו ב-GitHub.</p>
 </section>
 </main>'''
-write("index.html", shell("חוקה ברוח מסמך העקרונות — טיוטה לדיון", home, "index", "טיוטת חוקה למדינת ישראל שנוסחה מעמדות ביחד, ישראל ביתנו, הדמוקרטים וישר!"))
-print("built: index +", ", ".join(p[0] for p in PAGES), "| open:", open_n, "done:", done_n)
+    write("index.html", shell("החוקה ותוצרי קבוצה ב' — טיוטות לדיון", home, "index", "החוקה, קווי היסוד לממשלה, שלושת החוקים ותוכנית 100 הימים — נוסחו מעמדות ביחד, ישראל ביתנו, הדמוקרטים וישר!"))
+    print("built: index, laws +", ", ".join(p["slug"] for p in PAGES), "| open:", open_n, "done:", done_n, "| guideline clauses:", guide_n)
+
+
+if __name__ == "__main__":
+    main()
