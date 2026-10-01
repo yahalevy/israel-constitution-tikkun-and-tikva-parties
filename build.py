@@ -105,7 +105,7 @@ def nav(current):
         mark = ' aria-current="page"' if slug == cur else ""
         items.append('<a href="%s"%s>%s</a>' % (href, mark, label))
     return ('<header class="topbar"><div class="topbar-inner">'
-            '<a class="brand" href="index.html"><b>קבוצה ב\'</b><span>קווי היסוד לממשלה הבאה</span></a>'
+            '<a class="brand" href="index.html"><b>קווי היסוד לממשלה הבאה</b><span>טיוטה עצמאית · לא מטעם המפלגות</span></a>'
             '<nav class="nav" aria-label="ניווט ראשי">%s</nav></div>%s</header>' % ("".join(items), stripe() if current != "index" else ""))
 
 
@@ -115,14 +115,15 @@ def shell(title, body, current, description=""):
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{esc(title)}</title>
-<meta name="description" content="{esc(description)}">
+<title>{esc(title if current == 'index' else title + ' — טיוטה עצמאית')}</title>
+<meta name="description" content="{esc(description + ' טיוטה עצמאית, לא מטעם המפלגות.')}">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
 {nav(current)}
+<div class="notice" role="note"><div class="wrap"><b>טיוטה עצמאית — אין לה קשר למפלגות.</b> האתר אינו מטעם ביחד, ישראל ביתנו, הדמוקרטים או ישר!, והטקסטים בו לא אושרו על ידן. הם נוסחו מתוך עמדותיהן הפומביות, ברוח מסמך העקרונות של ראשי המפלגות (26.9.2026). <a href="letter.html">איך נוסחו</a></div></div>
 {body}
-<footer class="site-footer"><div class="wrap"><b>קבוצה ב' · טיוטות לדיון, {TODAY}</b><p>נוסחו מתוך המצעים, העקרונות וההצהרות הפומביות של ביחד, ישראל ביתנו, הדמוקרטים וישר!, ברוח מסמך העקרונות של ראשי המפלגות מיום 26.9.2026. אינן נוסח סופי ואינן מחייבות את המפלגות. הערות ותיקונים — דרך <a href="https://github.com/yahalevy/tikkun-tikva-group-b">מאגר הקוד הפתוח</a>.</p></div></footer>
+<footer class="site-footer"><div class="wrap"><b>טיוטה עצמאית לדיון · {TODAY}</b><p>אין לאתר קשר למפלגות: הוא אינו מטעם ביחד, ישראל ביתנו, הדמוקרטים או ישר!, ולא אושר על ידן. הטקסטים נוסחו מתוך המצעים, העקרונות וההצהרות הפומביות שלהן, ברוח מסמך העקרונות של ראשי המפלגות מיום 26.9.2026. הם אינם נוסח סופי ואינם מחייבים את המפלגות. הערות ותיקונים — דרך <a href="https://github.com/yahalevy/tikkun-tikva-group-b">מאגר הקוד הפתוח</a>.</p></div></footer>
 </body>
 </html>'''
 
@@ -606,12 +607,12 @@ def main():
 <h3><a href="disputes.html">מחלוקות וחלופות</a></h3><p>%s</p><div class="cc-links"><a href="disputes.html">למסמך המחלוקות ←</a><a href="pdf/%s" download>הורדה</a></div></article>''' % (PAGE["disputes"]["lede"], PAGE["disputes"]["pdf"]))
     legend_rows = "".join('<li>%s<span>%s</span></li>' % (tag_html(t), d) for t, d in [
         ("4/4", "ארבע המפלגות"), ("3+", "שלוש, והרביעית ללא עמדה ואינה מתנגדת"), ("צר", "מכנה משותף צר; החלופות במסמך המחלוקות"),
-        ("גישור", "נוסח של המטה שנדרש כדי שהסעיף יעבוד"), ("סטטוס קוו", "אין עמדה מפלגתית; הדין הקיים"), ("הוכרע במטה", "טעון אישור ראשי המפלגות")])
+        ("גישור", "נוסח של המטה שנדרש כדי שהסעיף יעבוד"), ("סטטוס קוו", "אין עמדה מפלגתית; הדין הקיים"), ("הוכרע במטה", "הכרעה של כותבי הטיוטה; טעונה אישור ראשי המפלגות")])
     open_list = "".join("<li>%s</li>" % linkify(esc(i), "constitution.html") for i in open_items)
     home = f'''<section class="hero"><div class="wrap hero-grid">
-<div class="hero-text"><span class="kicker">טיוטות מטה לדיון · {TODAY}</span>
+<div class="hero-text"><span class="kicker">טיוטה עצמאית לדיון · {TODAY}</span>
 <h1>קווי היסוד<br>לממשלה הבאה</h1>
-<p>עבודת המטה של קבוצה ב', ברוח מסמך העקרונות של ראשי מפלגות התיקון והתקווה. כל סעיף נוסח מתוך העמדות הפומביות של ביחד, ישראל ביתנו, הדמוקרטים וישר! בלבד, ולכל סעיף יש מקור.</p>
+<p>טיוטה עצמאית למשימה שמסמך העקרונות של ראשי מפלגות התיקון והתקווה הטיל על קבוצה ב'. היא אינה מטעם המפלגות ולא אושרה על ידן. כל סעיף נוסח מתוך העמדות הפומביות של ביחד, ישראל ביתנו, הדמוקרטים וישר! בלבד, ולכל סעיף יש מקור.</p>
 <div class="actions"><a class="btn btn-sky" href="guidelines.html">לקווי היסוד</a><a class="btn btn-ghost" href="letter.html">למכתב ההסבר</a></div></div>
 <figure class="mandate"><span class="kicker">המנדט</span><blockquote>"{mandate}"</blockquote><figcaption>מסמך העקרונות של ראשי מפלגות התיקון והתקווה, 26.9.2026</figcaption></figure>
 </div><div class="wrap">{stripe()}</div></section>
@@ -655,10 +656,10 @@ def main():
 </section>
 <section class="home-sec about" aria-label="על המסמכים">
 <div><h2>על המסמכים</h2><p>איך נוסחו, מי בדק אותם ומה הלאה — במכתב ההסבר, בשפה לא משפטית.</p><a href="letter.html">למכתב ההסבר ←</a></div>
-<div><h2>מה זה לא</h2><p>לא נוסח סופי ולא מסמך מטעם המפלגות. ההכרעות שהתקבלו במטה מסומנות, וכולן טעונות אישור ראשי המפלגות. חלק מהעמדות לקוח מתשובות לשאלוני עיתונים ומראיונות; כל ציטוט מובא עם הדובר, המקור והתאריך.</p></div>
+<div><h2>מה זה לא</h2><p>לא מסמך מטעם המפלגות ולא נוסח סופי. אין לאתר קשר לביחד, לישראל ביתנו, לדמוקרטים או לישר!, והוא לא אושר על ידן. ההכרעות שמסומנות "הוכרע במטה" הן הכרעות של כותבי הטיוטה, וכולן טעונות אישור ראשי המפלגות. חלק מהעמדות לקוח מתשובות לשאלוני עיתונים ומראיונות; כל ציטוט מובא עם הדובר, המקור והתאריך.</p></div>
 </section>
 </main>'''
-    write("index.html", shell("קווי היסוד לממשלה הבאה — תוצרי קבוצה ב'", home, "index",
+    write("index.html", shell("קווי היסוד לממשלה הבאה — טיוטה עצמאית", home, "index",
                               "קווי היסוד לממשלה הבאה: החוקה, ועדת החקירה, חוק השוויון בנטל, הגבלת הכהונה ותוכנית 100 הימים — נוסחו מעמדות ביחד, ישראל ביתנו, הדמוקרטים וישר!"))
     print("built: index +", ", ".join(p["slug"] for p in PAGES), "| open:", open_n, "done:", done_n, "| clauses:", guide_n, "| open items:", len(open_items))
 

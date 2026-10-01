@@ -19,7 +19,7 @@ async def main():
             await pg.emulate_media(media='print')
             await pg.pdf(path=str(SITE/'pdf'/pdf), format='A4', margin={'top':'18mm','bottom':'18mm','left':'16mm','right':'16mm'}, print_background=True,
                 display_header_footer=True, header_template='<div></div>',
-                footer_template='<div style="font-size:8px;width:100%%;text-align:center;color:#666;direction:rtl">טיוטה לדיון · %s · עמוד <span class="pageNumber"></span> מתוך <span class="totalPages"></span></div>' % TODAY)
+                footer_template='<div style="font-size:8px;width:100%%;text-align:center;color:#666;direction:rtl">טיוטה עצמאית · לא מטעם המפלגות · %s · עמוד <span class="pageNumber"></span> מתוך <span class="totalPages"></span></div>' % TODAY)
             await pg.close()
             print('pdf:', pdf)
         await b.close()
