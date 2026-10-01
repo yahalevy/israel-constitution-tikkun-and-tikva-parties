@@ -67,7 +67,7 @@ PAGES = [
          lede="על מה המסמכים, איך נוסחו, עיקרי התוצרים ומה הלאה — בשפה לא משפטית."),
     # the summary is now the home page; the page stays so old links and its PDF keep working
     dict(slug="summary", md="summary.md", label="תקציר", title=None, nav=False,
-         kind="תקציר", pdf="תקציר-החוקה.pdf",
+         kind="תקציר", pdf="תקציר-התוצרים.pdf",
          lede="עמוד אחד: כל תוצר במבט אחד, עיקרי החוקה ומה נשאר להכרעת ראשי המפלגות."),
 ]
 PAGE = {p["slug"]: p for p in PAGES}
@@ -122,7 +122,7 @@ def shell(title, body, current, description=""):
 <body>
 {nav(current)}
 {body}
-<footer class="site-footer"><div class="wrap"><b>קבוצה ב' · טיוטות לדיון, {TODAY}</b><p>נוסחו מתוך המצעים, העקרונות וההצהרות הפומביות של ביחד, ישראל ביתנו, הדמוקרטים וישר!, ברוח מסמך העקרונות של ראשי המפלגות מיום 26.9.2026. אינן נוסח סופי ואינן מחייבות את המפלגות. הערות ותיקונים — דרך <a href="https://github.com/yahalevy/israel-constitution-tikkun-and-tikva-parties">מאגר הקוד הפתוח</a>.</p></div></footer>
+<footer class="site-footer"><div class="wrap"><b>קבוצה ב' · טיוטות לדיון, {TODAY}</b><p>נוסחו מתוך המצעים, העקרונות וההצהרות הפומביות של ביחד, ישראל ביתנו, הדמוקרטים וישר!, ברוח מסמך העקרונות של ראשי המפלגות מיום 26.9.2026. אינן נוסח סופי ואינן מחייבות את המפלגות. הערות ותיקונים — דרך <a href="https://github.com/yahalevy/tikkun-tikva-group-b">מאגר הקוד הפתוח</a>.</p></div></footer>
 </body>
 </html>'''
 

@@ -3,7 +3,7 @@ from playwright.async_api import async_playwright
 SITE=pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SITE))
 from build import PAGES, TODAY  # one list of pages for the site and the PDFs
-PUBLIC='https://yahalevy.github.io/israel-constitution-tikkun-and-tikva-parties/'
+PUBLIC='https://yahalevy.github.io/tikkun-tikva-group-b/'
 async def main():
     async with async_playwright() as p:
         b=await p.chromium.launch()
