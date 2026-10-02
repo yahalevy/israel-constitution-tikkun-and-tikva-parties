@@ -263,10 +263,28 @@ def loosen_lists(text):
     return "\n".join(out)
 
 
+SUBITEM = re.compile(r"^(>?)( {2,3}| {5,7})((?:[-*]|\d+\.) )")
+
+
+def nest_lists(text):
+    """Sub-items are indented by two or three spaces (and sub-sub-items by five) in the documents; Python-Markdown
+    nests a list only at four and eight. A sub-item that follows an indented table is left alone: indented four
+    after a table it would become a code block."""
+    lines, out, prev = text.split("\n"), [], ""
+    for line in lines:
+        m = SUBITEM.match(line)
+        if m and not prev.lstrip().startswith("|"):
+            line = m.group(1) + ("    " if len(m.group(2)) < 5 else "        ") + line[m.end(2):]
+        out.append(line)
+        if line.strip():
+            prev = line
+    return "\n".join(out)
+
+
 def md_to_html(text):
     md = markdown.Markdown(extensions=["tables", "sane_lists"])
     # "✓*" is a verification mark, not the start of an emphasis
-    return md.convert(loosen_lists(text).replace("✓*", "✓\\*"))
+    return md.convert(nest_lists(loosen_lists(text)).replace("✓*", "✓\\*"))
 
 
 def wrap_tables(h):
