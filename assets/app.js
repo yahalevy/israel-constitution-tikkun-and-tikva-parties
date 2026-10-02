@@ -85,6 +85,8 @@
     var clearBtn = box.querySelector(".ex-clear");
     var cells = {};
     all(".cell[data-target]", box).forEach(function (c) { cells[c.dataset.target] = c; });
+    var fold = box.querySelector(".map-fold");
+    if (fold && window.matchMedia && matchMedia("(max-width: 640px)").matches) fold.open = false;
 
     // headings, with the items under each; everything else is context, set aside while filtering
     var kids = Array.prototype.slice.call(root.children), heads = [], context = [];
@@ -178,7 +180,10 @@
       // the element a link points to: bring it back if the filter set it aside, and open an item's sources
       reveal: function (el) {
         if (!root.contains(el)) return false;
-        if (hidden(el)) clear();
+        if (hidden(el)) {
+          clear();
+          if (statusEl) statusEl.textContent = "הסינון נוקה כדי להציג את הסעיף המבוקש.";
+        }
         if (el.hasAttribute("data-item")) {
           var b = el.querySelector(".src-toggle");
           if (b) toggle(b, true);
@@ -236,6 +241,7 @@
           state = { show: "all", q: "" };
           if (input) input.value = "";
           apply(true);
+          if (statusEl) statusEl.textContent = "הסינון נוקה כדי להציג את הנקודה המבוקשת.";
         }
         return el.hasAttribute("data-status");
       }

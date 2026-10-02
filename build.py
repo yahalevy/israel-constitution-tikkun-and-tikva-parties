@@ -516,7 +516,8 @@ def agreement_map(secs, chapters, href_prefix):
         short = full.split(" — ")[0]
         rows.append('<div class="map-row"><a class="map-ch" href="%s#ch-%s" title="%s">%s <span>%s</span></a><div class="map-cells">%s</div></div>'
                     % (href_prefix, key, esc(full), short, esc(full.split(" — ")[1]), "".join(cells)))
-    return '<div class="map" role="group" aria-label="מפת ההסכמה">%s</div>' % "".join(rows)
+    return ('<details class="map-fold" open><summary>מפת ההסכמה — ריבוע לכל סעיף</summary>'
+            '<div class="map" role="group" aria-label="מפת ההסכמה">%s</div></details>' % "".join(rows))
 
 
 def legend(secs, as_buttons, levels=None):
@@ -524,7 +525,7 @@ def legend(secs, as_buttons, levels=None):
     counts = {k: sum(1 for s in secs.values() if k in s["lvls"]) for k, _, _ in levels}
     items = []
     for k, label, desc in levels:
-        inner = '%s<span class="chip-label">%s</span><span class="chip-n">%d</span>' % (dot(k), label, counts[k])
+        inner = '%s<span class="chip-label">%s</span><span class="chip-n">%d<span class="sr"> סעיפים</span></span>' % (dot(k), label, counts[k])
         if as_buttons:
             items.append('<button type="button" class="chip" data-lvl="%s" aria-pressed="false" title="%s">%s</button>' % (k, esc(desc), inner))
         else:
@@ -547,7 +548,7 @@ def disputes_links(entries):
 
 def party_chips(items):
     counts = {k: sum(1 for s in items.values() if k in s["parties"]) for k, _, _ in PARTIES}
-    return "".join('<button type="button" class="chip" data-party="%s" aria-pressed="false"><span class="chip-label">%s</span><span class="chip-n">%d</span></button>'
+    return "".join('<button type="button" class="chip" data-party="%s" aria-pressed="false"><span class="chip-label">%s</span><span class="chip-n">%d<span class="sr"> סעיפים</span></span></button>'
                    % (k, l, counts[k]) for k, l, _ in PARTIES)
 
 
@@ -679,9 +680,9 @@ def tracker(h, open_n, done_n):
 <div class="meter" role="img" aria-label="{done_n} מתוך {total} נקודות הוכרעו"><span style="width:{100 * done_n / total:.1f}%"></span></div>
 <p class="meter-label"><b>{done_n}</b> מתוך {total} הוכרעו במטה או הוסכמו (טעונות אישור) · <b class="signal">{open_n}</b> פתוחות</p>
 <div class="chips" role="group" aria-label="הצגה לפי מצב">
-<button type="button" class="chip" data-show="all" aria-pressed="true"><span class="chip-label">הכול</span><span class="chip-n">{total}</span></button>
-<button type="button" class="chip" data-show="open" aria-pressed="false"><span class="pill open">פתוחות</span><span class="chip-n">{open_n}</span></button>
-<button type="button" class="chip" data-show="done" aria-pressed="false"><span class="pill done">הוכרעו</span><span class="chip-n">{done_n}</span></button>
+<button type="button" class="chip" data-show="all" aria-pressed="true"><span class="chip-label">הכול</span><span class="chip-n">{total}<span class="sr"> נקודות</span></span></button>
+<button type="button" class="chip" data-show="open" aria-pressed="false"><span class="pill open">פתוחות</span><span class="chip-n">{open_n}<span class="sr"> נקודות</span></span></button>
+<button type="button" class="chip" data-show="done" aria-pressed="false"><span class="pill done">הוכרעו</span><span class="chip-n">{done_n}<span class="sr"> נקודות</span></span></button>
 </div>
 <div class="ex-search"><label for="tq" class="sr">חיפוש בהכרעות</label><input id="tq" type="search" placeholder="חיפוש בהכרעות: יועץ משפטי, שבת, גיוס…" autocomplete="off" enterkeyhint="search"></div>
 <p class="ex-status" aria-live="polite">מוצגות {total} נקודות.</p>

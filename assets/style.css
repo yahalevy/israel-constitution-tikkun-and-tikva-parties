@@ -259,6 +259,7 @@ span.docref { color: var(--heading); }
 .legal p.sec strong a { color: inherit; }
 .legal p.sec strong a:hover { color: var(--accent); text-decoration: none; }
 .legal .preamble { font-family: var(--serif); font-size: 1.1rem; }
+@media (max-width: 560px) { .legal p.sec { text-align: start; } } /* justified text leaves wide gaps on a narrow column */
 
 /* tables */
 .table-wrap { overflow-x: auto; margin: 0 0 1.4em; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
@@ -318,6 +319,13 @@ button.chip:hover { border-color: var(--muted); }
 .cell { width: 18px; height: 18px; border-radius: 3px; display: block; background: linear-gradient(135deg, var(--c1) 0 50%, var(--c2) 50% 100%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 8%, transparent); transition: opacity .15s, transform .15s; }
 .cell:hover, .cell:focus-visible { transform: scale(1.25); text-decoration: none; }
 .cell.off { opacity: 0.15; }
+/* phones: the map folds away, and its squares grow to the 24 px minimum touch target */
+.map-fold > summary { display: none; }
+@media (max-width: 640px) {
+  .map-fold > summary { display: list-item; cursor: pointer; color: var(--accent); font-weight: 600; font-size: 0.92rem; }
+  .map-fold[open] > summary { margin-bottom: 8px; }
+}
+@media (max-width: 640px), (pointer: coarse) { .cell { width: 24px; height: 24px; } }
 .flash { background: var(--accent-soft) !important; border-radius: 6px; box-shadow: 0 0 0 6px var(--accent-soft); }
 @media (prefers-reduced-motion: no-preference) { [data-item], .decisions li { transition: background-color .8s, box-shadow .8s; } html { scroll-behavior: smooth; } }
 
