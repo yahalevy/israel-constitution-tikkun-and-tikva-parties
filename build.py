@@ -120,6 +120,7 @@ def shell(title, body, current, description=""):
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
+<a class="skip" href="#content">דלג לתוכן</a>
 {nav(current)}
 <div class="notice" role="note"><div class="wrap"><b>טיוטה עצמאית — אין לה קשר למפלגות.</b> האתר אינו מטעם ביחד, ישראל ביתנו, הדמוקרטים או ישר!, והטקסטים בו לא אושרו על ידן. הם נוסחו מתוך עמדותיהן הפומביות, ברוח מסמך העקרונות של ראשי המפלגות (26.9.2026). <a href="letter.html">איך נוסחו</a></div></div>
 {body}
@@ -132,9 +133,11 @@ def shell(title, body, current, description=""):
 # "סעיף 23", "ס' 92(א)", "סעיפים 43 ו-92" — but not "ס' 6א", "סעיף 0.4".
 XREF = re.compile(r"(?<![\w-])(סעיפים|סעיף|ס')\s+(\d{1,3})(?!\d)(?!\.\d)(?![א-ת])((?:\([א-ת]\))?(?:\(\d+\))?)")
 CHAIN = re.compile(r"((?:,\s*|\s+ו-)\d{1,3}(?!\d)(?!\.\d)(?![א-ת])(?:\([א-ת]\))?)+")
-RANGE = r"(?:[–-]\d{1,3}(?:\([א-ת]\))?)?"
-# a reference followed by another instrument ("ס' 14 להצעת החוק", "ס' 46 לחוק שירות ביטחון") is not to the constitution
-NOT_CONST_AFTER = re.compile(r"^" + RANGE + r"\s+(?:ל|ב|של\s+)(?:חוק(?!ה)|הצעת|הצעה|ההצעה|החלטה|ההחלטה|קווי|תוכנית|פקודת|תקנון|מתווה|מסמך|נוסח)")
+# what may follow the first number before the instrument is named: a range or a list ("ס' 14, 22 לחוק")
+RANGE = r"(?:(?:[–-]|,\s*|\s+ו-)\d{1,3}(?:\([א-ת]\))?(?:\(\d+\))?)*"
+# a reference followed by another instrument ("ס' 14 להצעת החוק", "ס' 46 לחוק שירות ביטחון") is not to the constitution;
+# nor is one whose instrument is a document reference ("ס' 14 ל`claude/הצעת…`", or rendered as a separate element)
+NOT_CONST_AFTER = re.compile(r"^" + RANGE + r"(?:\s+(?:ל|ב|של\s+)(?:חוק(?!ה)|הצעת|הצעה|ההצעה|החלטה|ההחלטה|קווי|תוכנית|פקודת|תקנון|מתווה|מסמך|נוסח)|\s+[לב]$|\s+[לב]`claude/(?!חוקה))")
 # ... and so is one that directly follows a law's name ("חוק יסוד: הכנסת ס' 4")
 NOT_CONST_BEFORE = re.compile(r"(?:חוק[- ]יסוד:?[^;()|,.]{0,40}|חוק [^;()|,.]{2,40}|פקודת [^;()|,.]{2,30}|תקנון הכנסת)\s*$")
 # in documents other than the constitution family, link only what is explicitly the constitution
@@ -176,12 +179,70 @@ def link_sections(fragment, prefix, mode):
 
 
 def text_parts(html_text, fn):
-    parts = re.split(r"(<[^>]+>)", html_text)
-    return "".join(p if p.startswith("<") else fn(p) for p in parts)
+    """Apply fn to the text between tags, but not to text that is already inside a link."""
+    parts, out, depth = re.split(r"(<[^>]+>)", html_text), [], 0
+    for p in parts:
+        if p.startswith("<"):
+            if re.match(r"<a[\s>]", p):
+                depth += 1
+            elif p.startswith("</a"):
+                depth = max(0, depth - 1)
+            out.append(p)
+        else:
+            out.append(fn(p) if depth == 0 else p)
+    return "".join(out)
 
 
-def linkify(html_text, prefix, mode="default"):
-    return text_parts(html_text, lambda p: link_sections(p, prefix, mode))
+# ---------- cross-references to the guidelines' clauses ("קווי היסוד 7.2", "קווי היסוד, סעיפים 7.1–7.3, 12.1") ----------
+GIDS = set(re.findall(r"^\*\*(\d{1,2}\.\d{1,2})\*\*", (DOCS / "guidelines.md").read_text(encoding="utf-8"), flags=re.M))
+GNUM = r"\d{1,2}\.\d{1,2}(?!\d)(?!\.\d)"
+GREF = re.compile(r"(?<![\w-])((?:ו|ב|ל|מ|וב|ול|ומ)?קווי היסוד,?\s+(?:(?:סעיף|סעיפים)\s+)?)(" + GNUM + r")((?:\s*(?:,|–|-|ו-)\s*" + GNUM + r")*)")
+GLOCAL = re.compile(r"(?<![\w-])((?:ו|ב|ל|מ)?(?:סעיף|סעיפים)\s+)(" + GNUM + r")((?:\s*(?:,|–|-|ו-)\s*" + GNUM + r")*)")
+
+
+def link_guidelines(fragment, prefix, local=False):
+    """Link clause numbers of the guidelines; on the guidelines page itself also "סעיף 0.4"."""
+    def num(n):
+        return '<a class="xref" href="%s#g-%s">%s</a>' % (prefix, n, n) if n in GIDS else n
+    def rep(m):
+        chain = re.sub(GNUM, lambda x: num(x.group(0)), m.group(3))
+        return m.group(1) + num(m.group(2)) + chain
+    fragment = GREF.sub(rep, fragment)
+    if local:
+        fragment = GLOCAL.sub(rep, fragment)
+    return fragment
+
+
+def linkify(html_text, prefix, mode="default", gprefix="guidelines.html", local=False):
+    h = text_parts(html_text, lambda p: link_sections(p, prefix, mode))
+    return text_parts(h, lambda p: link_guidelines(p, gprefix, local))
+
+
+def extract_grefs(text):
+    """Guidelines clauses a passage cites ("קווי היסוד 7.2", "קווי היסוד, סעיפים 12.2–12.3")."""
+    nums = []
+    for m in GREF.finditer(text):
+        for n in [m.group(2)] + re.findall(GNUM, m.group(3)):
+            if n in GIDS and n not in nums:
+                nums.append(n)
+    return nums
+
+
+# ---------- internal document references ("`claude/מחלוקות וחלופות.md`") shown as the document's name ----------
+DOCMAP = {"חוקה - טיוטה מלאה": "constitution", "מחלוקות וחלופות": "disputes", "תקציר החוקה": "summary", "מכתב הסבר": "letter",
+          "הצעת חוק יסוד - הגבלת כהונה": "term-limits", "ועדת חקירה ממלכתית": "inquiry", "הצעת חוק השוויון בנטל": "equal-burden",
+          "הכרעה - היקף הדחייה": "deferral-decision", "קווי היסוד לממשלה": "guidelines", "תוכנית 100 הימים": "100-days"}
+
+
+def docrefs(h):
+    def rep(m):
+        name = m.group(1)
+        slug = DOCMAP.get(name)
+        if slug:
+            return '<a class="docref" href="%s.html">%s</a>' % (slug, name)
+        return '<span class="docref">%s</span>' % name
+    h = re.sub(r"<code>claude/([^<]+?)\.md</code>", rep, h)
+    return re.sub(r"`claude/([^`]+?)\.md`", rep, h)
 
 
 LIST_ITEM = re.compile(r"(?:[-*]|\d+\.) ")
@@ -204,11 +265,21 @@ def loosen_lists(text):
 
 def md_to_html(text):
     md = markdown.Markdown(extensions=["tables", "sane_lists"])
-    return md.convert(loosen_lists(text))
+    # "✓*" is a verification mark, not the start of an emphasis
+    return md.convert(loosen_lists(text).replace("✓*", "✓\\*"))
 
 
 def wrap_tables(h):
-    return h.replace("<table>", '<div class="table-wrap"><table>').replace("</table>", "</table></div>")
+    """Long tables get their own scroll box, so the header row (the party names) stays in view."""
+    def rep(m):
+        tall = " tall" if m.group(0).count("<tr") > 15 else ""
+        return '<div class="table-wrap%s">%s</div>' % (tall, m.group(0))
+    return re.sub(r"<table>.*?</table>", rep, h, flags=re.S)
+
+
+def inline_md(s):
+    out = md_to_html(s).strip()
+    return out[3:-4] if out.startswith("<p>") and out.endswith("</p>") else out
 
 
 def pills(h):
@@ -233,8 +304,15 @@ def tag_level(txt):
     return "sq"
 
 
+TAG_DESC = {"all4": "ארבע המפלגות", "three": "שלוש מפלגות, והרביעית ללא עמדה ואינה מתנגדת", "narrow": "מכנה משותף צר",
+            "bridge": "נוסח של המטה שנדרש כדי שהסעיף יעבוד", "sq": "הדין הקיים או הליך בלבד",
+            "decided": "הכרעה של כותבי הטיוטה, טעונה אישור ראשי המפלגות"}
+
+
 def tag_html(txt):
-    return '<span class="tag lvl-%s"><span class="dot" aria-hidden="true"></span>%s</span>' % (tag_level(txt), txt)
+    lvl = tag_level(txt)
+    return ('<span class="tag lvl-%s" title="%s"><span class="dot" aria-hidden="true"></span>%s<span class="sr"> — %s</span></span>'
+            % (lvl, TAG_DESC[lvl], txt, TAG_DESC[lvl]))
 
 
 def tag_fragment(t):
@@ -330,35 +408,85 @@ def load_sections(text):
     return secs, chapters
 
 
+# the guidelines mark each clause with the tags themselves; the filter uses the same vocabulary
+GLEVELS = [("all4", "4/4"), ("three", "3+"), ("narrow", "צר"), ("bridge", "גישור"), ("sq", "סטטוס קוו / הליך"), ("decided", "הוכרע במטה")]
+
+
+def glevels(clause):
+    s = set()
+    for m in re.finditer(r"\[([^\[\]]+)\]", clause):
+        x = m.group(1)
+        if x.startswith("הוכרע במטה"):
+            s.add("decided")
+        elif TAG.fullmatch("[%s]" % x):
+            s.add(tag_level(x))
+    return [k for k, _ in GLEVELS if k in s] or ["sq"]
+
+
+def load_clauses(text):
+    """Clause number -> dict(what, sources, level_text, parties, lvls), from the appendix rows and the clause's own tags."""
+    body, _, appx = text.partition("\n## נספח מקורות")
+    rows = {}
+    for line in appx.split("\n"):
+        rm = re.match(r"^\|\s*(\d{1,2}\.\d{1,2})\s*\|(.*)\|\s*$", line)
+        if rm:
+            cells = [c.strip() for c in rm.group(2).split("|")]
+            if len(cells) >= 3:
+                rows[rm.group(1)] = dict(what=cells[0], sources=cells[1], level_text=cells[2], parties=parties_in(cells[1]))
+    for m in re.finditer(r"^\*\*(\d{1,2}\.\d{1,2})\*\*(.*(?:\n.+)*)", body, flags=re.M):
+        rows.setdefault(m.group(1), dict(what="", sources="", level_text="", parties=[]))["lvls"] = glevels(m.group(2))
+    return rows
+
+
 EXCL_DISPUTES = {"איך נקבע המכנה המשותף ומה נדרש להכרעה", "טבלת המחלוקות במבט אחד", "הכרעות נדרשות מראשי המפלגות"}
 
 
-def disputes_index(text):
-    """Heading ids d-1.. in document order; section -> [(id, title)] for headings whose text cites it; and all headings."""
-    body = text.split("\n", 1)[1]
-    refmap, heads, cur, buf, i = {}, [], None, [], 0
-    def flush():
-        if cur and cur[1] not in EXCL_DISPUTES:
-            for n in extract_refs("".join(buf)):
-                refmap.setdefault(n, [])
-                if cur not in refmap[n]:
-                    refmap[n].append(cur)
-    for line in body.split("\n"):
-        m = re.match(r"^#{2,3} (.+)$", line)
-        if m:
-            flush(); i += 1; cur = ("d-%d" % i, m.group(1).strip()); buf = []; heads.append(cur)
-        else:
-            buf.append(line + "\n")
-    flush()
-    return refmap, heads
+def slug_text(inner):
+    """A heading id made from its text, so that shared links survive when headings are added."""
+    s = html.unescape(re.sub(r"<[^>]+>", "", inner))
+    s = re.sub(r"[^\w\s-]", "", s.replace("‏", ""))
+    s = re.sub(r"[\s_-]+", "-", s).strip("-")
+    return s[:80].strip("-") or "section"
+
+
+class HeadingIds:
+    def __init__(self):
+        self.seen = {}
+
+    def __call__(self, inner):
+        base = slug_text(inner)
+        n = self.seen[base] = self.seen.get(base, 0) + 1
+        return base if n == 1 else "%s-%d" % (base, n)
 
 
 def id_headings(h):
-    counter = [0]
-    def rep(m):
-        counter[0] += 1
-        return '<h%s id="d-%d">' % (m.group(1), counter[0])
-    return re.sub(r"<h([23])>", rep, h)
+    ids = HeadingIds()
+    return re.sub(r"<h([23])>(.*?)</h\1>", lambda m: '<h%s id="%s">%s</h%s>' % (m.group(1), ids(m.group(2)), m.group(2), m.group(1)), h, flags=re.S)
+
+
+def disputes_index(text):
+    """Heading ids (as id_headings gives them) in document order; constitution section (and guidelines clause)
+    -> [(id, title)] for the headings whose text cites it."""
+    body = text.split("\n", 1)[1]
+    refmap, gmap, heads, cur, buf, ids = {}, {}, [], None, [], HeadingIds()
+    def flush():
+        if cur and cur[1] not in EXCL_DISPUTES:
+            chunk = "".join(buf)
+            for target, nums in ((refmap, extract_refs(chunk)), (gmap, extract_grefs(cur[1] + "\n" + chunk))):
+                for n in nums:
+                    target.setdefault(n, [])
+                    if cur not in target[n]:
+                        target[n].append(cur)
+    for line in body.split("\n"):
+        m = re.match(r"^#{2,3} (.+)$", line)
+        if m:
+            flush()
+            inner = re.sub(r"^<h\d>|</h\d>$", "", md_to_html(line).strip())
+            cur = (ids(inner), m.group(1).strip()); buf = []; heads.append(cur)
+        else:
+            buf.append(line + "\n")
+    flush()
+    return refmap, gmap, heads
 
 
 def dot(lvl):
@@ -382,7 +510,8 @@ def agreement_map(secs, chapters, href_prefix):
         for n in sorted(k for k, v in secs.items() if v["chapter"] and v["chapter"][0] == key):
             s = secs[n]
             label = "%d. %s — %s" % (n, s["title"], lvl_text(s))
-            cells.append('<a class="cell" style="%s" href="%s#s-%d" data-sec="%d" title="%s" aria-label="%s"></a>'
+            # out of the tab order: 100 stops are too many; the rail and the section labels reach the same panels
+            cells.append('<a class="cell" style="%s" href="%s#s-%d" data-target="s-%d" tabindex="-1" title="%s" aria-label="%s"></a>'
                          % (tone(s), href_prefix, n, n, esc(label), esc(label)))
         short = full.split(" — ")[0]
         rows.append('<div class="map-row"><a class="map-ch" href="%s#ch-%s" title="%s">%s <span>%s</span></a><div class="map-cells">%s</div></div>'
@@ -390,16 +519,45 @@ def agreement_map(secs, chapters, href_prefix):
     return '<div class="map" role="group" aria-label="מפת ההסכמה">%s</div>' % "".join(rows)
 
 
-def legend(secs, as_buttons):
-    counts = {k: sum(1 for s in secs.values() if k in s["lvls"]) for k, _, _ in LEVELS}
+def legend(secs, as_buttons, levels=None):
+    levels = levels or LEVELS
+    counts = {k: sum(1 for s in secs.values() if k in s["lvls"]) for k, _, _ in levels}
     items = []
-    for k, label, desc in LEVELS:
+    for k, label, desc in levels:
         inner = '%s<span class="chip-label">%s</span><span class="chip-n">%d</span>' % (dot(k), label, counts[k])
         if as_buttons:
             items.append('<button type="button" class="chip" data-lvl="%s" aria-pressed="false" title="%s">%s</button>' % (k, esc(desc), inner))
         else:
             items.append('<span class="chip static" title="%s">%s</span>' % (esc(desc), inner))
     return "".join(items), counts
+
+
+def panel_html(pid, lvl, rows, target, label):
+    """A source panel: rows of (term, html), and a button that copies the link to its item."""
+    parts = ['<div class="src lvl-%s" id="%s" hidden><dl>' % (lvl, pid)]
+    parts += ['<div><dt>%s</dt><dd>%s</dd></div>' % (dt, dd) for dt, dd in rows if dd]
+    parts.append('</dl><div class="src-actions"><button type="button" class="copy-link" data-target="%s" data-label="%s">העתקת קישור %s</button>'
+                 '<span class="copy-status" role="status"></span></div></div>' % (target, esc(label), esc(label)))
+    return "".join(parts)
+
+
+def disputes_links(entries):
+    return " · ".join('<a href="disputes.html#%s">%s</a>' % (i, esc(t)) for i, t in entries or [])
+
+
+def party_chips(items):
+    counts = {k: sum(1 for s in items.values() if k in s["parties"]) for k, _, _ in PARTIES}
+    return "".join('<button type="button" class="chip" data-party="%s" aria-pressed="false"><span class="chip-label">%s</span><span class="chip-n">%d</span></button>'
+                   % (k, l, counts[k]) for k, l, _ in PARTIES)
+
+
+def explorer_html(name, placeholder, level_chips, parties, status, middle=""):
+    return f"""<section class="explorer no-print" aria-label="חיפוש וסינון ב{name}">
+<div class="ex-search"><label for="q" class="sr">חיפוש ב{name}</label><input id="q" type="search" placeholder="{placeholder}" autocomplete="off" enterkeyhint="search"></div>
+<div class="ex-row"><span class="ex-label">רמת הסכמה</span><div class="chips">{level_chips}</div></div>
+<div class="ex-row"><span class="ex-label">מפלגה כמקור</span><div class="chips">{parties}</div></div>
+{middle}<div class="ex-foot"><p class="ex-status" aria-live="polite">{status}</p><button type="button" class="ex-clear" hidden>ניקוי הסינון</button></div>
+</section>"""
 
 
 def build_constitution(text, secs, chapters, refmap):
@@ -411,47 +569,66 @@ def build_constitution(text, secs, chapters, refmap):
         s = secs.get(n, {})
         lv = s.get("lvls", ["sq"])
         dots = dot(lv[0]) + (dot(lv[-1]) if len(lv) > 1 else "")
-        return ('<p class="sec" id="s-%d" data-lvls="%s" data-parties="%s"><strong><a href="#s-%d">%d.</a> %s</strong> '
-                '<button type="button" class="lvl-pill" aria-expanded="false" aria-controls="src-%d" title="מקור ורמת הסכמה">%s%s</button>'
-                % (n, " ".join(lv), " ".join(s.get("parties", [])), n, n, m.group(2), n, dots, lvl_text(s)))
+        return ('<p class="sec" id="s-%d" data-item data-lvls="%s" data-parties="%s"><strong><a href="#s-%d">%d.</a> %s</strong> '
+                '<button type="button" class="lvl-pill src-toggle" aria-expanded="false" aria-controls="src-%d" aria-label="%s — מקורות ורמת ההסכמה, סעיף %d">%s%s</button>'
+                % (n, " ".join(lv), " ".join(s.get("parties", [])), n, n, m.group(2), n, lvl_text(s), n, dots, lvl_text(s)))
     h = re.sub(r'<p><strong>(\d{1,3})\. ([^<]+?)</strong>', sec, h)
     h = h.replace('<h2>מבוא</h2>', '<h2 id="preamble">מבוא</h2>')
     h = re.sub(r"<h2>(פרק ([א-ת\"']+) — [^<]+)</h2>", lambda m: '<h2 id="ch-%s">%s</h2>' % (m.group(2).replace('"', '').replace("'", ""), m.group(1)), h)
     h = re.sub(r'(<h2 id="preamble">מבוא</h2>\s*)<p>', r'\1<p class="preamble">', h)
-    h = linkify(h, "", "internal")
+    h = docrefs(linkify(h, "", "internal"))
+    def cell(s):
+        return docrefs(tags(linkify(inline_md(s), "")))
     # source panel after each section
     def panel(m):
         n = int(m.group(2))
         s = secs.get(n, {})
-        lvl = s.get("lvl", "sq")
-        parts = ['<div class="src lvl-%s" id="src-%d" hidden><dl>' % (lvl, n)]
-        parts.append('<div><dt>רמת הסכמה</dt><dd><b>%s</b> · %s</dd></div>' % (lvl_text(s), linkify(esc(s.get("level_text", "")), "")))
-        parts.append('<div><dt>מה נקבע</dt><dd>%s</dd></div>' % linkify(esc(s.get("what", "")), ""))
-        parts.append('<div><dt>מקורות</dt><dd>%s</dd></div>' % linkify(esc(s.get("sources", "")), ""))
-        if refmap.get(n):
-            links = " · ".join('<a href="disputes.html#%s">%s</a>' % (i, esc(t)) for i, t in refmap[n])
-            parts.append('<div><dt>במסמך המחלוקות</dt><dd>%s</dd></div>' % links)
-        parts.append('</dl><div class="src-actions"><button type="button" class="copy-link" data-sec="%d">העתקת קישור לסעיף</button><span class="copy-status" role="status"></span></div></div>' % n)
-        return m.group(1) + "".join(parts)
+        rows = [("רמת הסכמה", "<b>%s</b> · %s" % (lvl_text(s), cell(s.get("level_text", "")))), ("מה נקבע", cell(s.get("what", ""))),
+                ("מקורות", cell(s.get("sources", ""))), ("במסמך המחלוקות", disputes_links(refmap.get(n)))]
+        return m.group(1) + panel_html("src-%d" % n, s.get("lvl", "sq"), rows, "s-%d" % n, "לסעיף %d" % n)
     h = re.sub(r'(<p class="sec" id="s-(\d+)".*?</p>)', panel, h, flags=re.S)
     chap_list = re.findall(r'<h2 id="(ch-[^"]+)">([^<]+)</h2>', h)
-    rail = '<nav class="rail" aria-label="פרקים"><h2>תוכן החוקה</h2><ol><li><a href="#preamble">מבוא</a></li>%s<li><a href="#appendix">נספח מקורות</a></li></ol></nav>' % "".join('<li data-ch="%s"><a href="#%s">%s</a></li>' % (i, i, t) for i, t in chap_list)
+    rail = '<nav class="rail" aria-label="פרקים"><h2>תוכן החוקה</h2><ol><li><a href="#preamble">מבוא</a></li>%s<li><a href="#appendix">נספח מקורות</a></li></ol></nav>' % "".join('<li><a href="#%s">%s</a></li>' % (i, t) for i, t in chap_list)
     mobile = '<details class="toc no-print"><summary>תוכן העניינים</summary><ol>%s</ol></details>' % "".join('<li><a href="#%s">%s</a></li>' % (i, t) for i, t in [("preamble", "מבוא")] + chap_list + [("appendix", "נספח מקורות")])
     ah = md_to_html("## נספח מקורות" + appx_md)
     ah = ah.replace("<h2>נספח מקורות</h2>", '<h2 id="appendix">נספח מקורות</h2>')
-    ah = '<section id="appendix-wrap">%s</section>' % wrap_tables(pills(linkify(ah, "")))
-    # explorer
-    lg, counts = legend(secs, True)
-    pcounts = {k: sum(1 for s in secs.values() if k in s["parties"]) for k, _, _ in PARTIES}
-    party_chips = "".join('<button type="button" class="chip" data-party="%s" aria-pressed="false"><span class="chip-label">%s</span><span class="chip-n">%d</span></button>' % (k, l, pcounts[k]) for k, l, _ in PARTIES)
-    explorer = f"""<section class="explorer no-print" aria-label="חיפוש וסינון">
-<div class="ex-search"><label for="q" class="sr">חיפוש בחוקה</label><input id="q" type="search" placeholder="חיפוש בחוקה: שירות, יועץ משפטי, שבת…" autocomplete="off" enterkeyhint="search"></div>
-<div class="ex-row"><span class="ex-label">רמת הסכמה</span><div class="chips">{lg}</div></div>
-<div class="ex-row"><span class="ex-label">מפלגה כמקור</span><div class="chips">{party_chips}</div></div>
-{agreement_map(secs, chapters, "")}
-<div class="ex-foot"><p class="ex-status" id="ex-status" aria-live="polite">כל ריבוע הוא סעיף; ריבוע בשני צבעים הוא סעיף שחלקיו ברמות הסכמה שונות. לחיצה על ריבוע, או על התווית שליד כותרת הסעיף, פותחת את המקורות.</p><button type="button" class="ex-clear" id="ex-clear" hidden>ניקוי הסינון</button></div>
-</section>"""
+    ah = '<section id="appendix-wrap">%s</section>' % wrap_tables(docrefs(pills(linkify(ah, ""))))
+    lg, _ = legend(secs, True)
+    explorer = explorer_html("חוקה", "חיפוש בחוקה: שירות, יועץ משפטי, שבת…", lg, party_chips(secs),
+                             "כל ריבוע הוא סעיף; ריבוע בשני צבעים הוא סעיף שחלקיו ברמות הסכמה שונות. לחיצה על ריבוע, או על התווית שליד כותרת הסעיף, פותחת את המקורות.",
+                             agreement_map(secs, chapters, "") + "\n")
     return rail, mobile, explorer, h, ah
+
+
+def build_guidelines(text, clauses, gmap):
+    """The guidelines as an explorer: each clause carries its levels and parties, with a source panel from the appendix."""
+    h = id_headings(md_to_html(text.split("\n", 1)[1]))
+    def clause(m):
+        n = m.group(1)
+        c = clauses.get(n, {})
+        return ('<p class="clause" id="g-%s" data-item data-lvls="%s" data-parties="%s"><strong><a class="num" href="#g-%s">%s</a></strong>'
+                % (n, " ".join(c.get("lvls", ["sq"])), " ".join(c.get("parties", [])), n, n))
+    h = re.sub(r"<p><strong>(\d{1,2}\.\d{1,2})</strong>", clause, h)
+    # the button closes the clause; the panel is put in after the text has been linked, so it is linked only once
+    h = re.sub(r'(<p class="clause" id="g-([\d.]+)".*?)</p>',
+               lambda m: '%s <button type="button" class="src-toggle" aria-expanded="false" aria-controls="gsrc-%s" aria-label="מקורות, סעיף %s">מקורות</button></p><!--panel %s-->'
+               % (m.group(1), m.group(2), m.group(2), m.group(2)), h, flags=re.S)
+    h = wrap_tables(docrefs(pills(tags(linkify(h, "constitution.html", "strict", "", True)))))
+    def cell(s):
+        return docrefs(tags(linkify(inline_md(s), "constitution.html", "strict", "", True)))
+    def panel(m):
+        n = m.group(1)
+        c = clauses.get(n, {})
+        lv = c.get("lvls", ["sq"])
+        rows = [("רמת הסכמה", cell(c.get("level_text", ""))), ("מה נקבע", cell(c.get("what", ""))),
+                ("מקורות", cell(c.get("sources", ""))), ("במסמך המחלוקות", disputes_links(gmap.get(n)))]
+        return panel_html("gsrc-%s" % n, lv[0], rows, "g-%s" % n, "לסעיף %s" % n)
+    h = re.sub(r"<!--panel ([\d.]+)-->", panel, h)
+    gl = [(k, label, TAG_DESC[k]) for k, label in GLEVELS]
+    lg, _ = legend(clauses, True, gl)
+    explorer = explorer_html("קווי היסוד", "חיפוש בקווי היסוד: דיור, ליבה, פשיעה…", lg, party_chips(clauses),
+                             "הסינון לפי הסימון שליד כל סעיף. הכפתור \"מקורות\" שבסוף הסעיף פותח את המקור ואת רמת ההסכמה.")
+    return explorer, h
 
 
 def doc_title(text):
@@ -459,18 +636,69 @@ def doc_title(text):
     return first[2:].strip() if first.startswith("# ") else ""
 
 
-def build_generic(text, slug):
-    """Document body, plus a side rail and a collapsible table of contents built from its H2s."""
+def rail_toc(h, nested=False):
+    """A side rail and a collapsible table of contents from the H2s (and, if nested, the H3s under them)."""
+    heads = [(int(l), i, re.sub(r"<[^>]+>", "", t)) for l, i, t in re.findall(r'<h([23]) id="([^"]+)">(.+?)</h\1>', h, flags=re.S)]
+    if not nested:
+        heads = [x for x in heads if x[0] == 2]
+    if sum(1 for x in heads if x[0] == 2) < 4:
+        return "", ""
+    out, open_sub = [], False
+    for k, (lvl, i, t) in enumerate(heads):
+        if lvl == 3 and not open_sub:
+            out.append("<ol>"); open_sub = True
+        elif lvl == 2 and open_sub:
+            out.append("</ol></li>"); open_sub = False
+        elif lvl == 2 and k:
+            out.append("</li>")
+        out.append('<li><a href="#%s">%s</a>' % (i, t) + ("</li>" if lvl == 3 else ""))
+    out.append("</ol></li>" if open_sub else "</li>")
+    items = "".join(out)
+    rail = '<nav class="rail" aria-label="תוכן המסמך"><h2>תוכן המסמך</h2><ol>%s</ol></nav>' % items
+    toc = '<details class="toc no-print"><summary>תוכן העניינים</summary><ol>%s</ol></details>' % items
+    return rail, toc
+
+
+def tracker(h, open_n, done_n):
+    """The list of decisions required from the party leaders, filterable by status, each item with its own link."""
+    m = re.search(r'(<h2 id="([^"]+)">הכרעות נדרשות מראשי המפלגות</h2>)\s*<ul>(.*?)</ul>', h, flags=re.S)
+    if not m:
+        return h
+    ids = HeadingIds()
+    def li(x):
+        inner = x.group(1)
+        status = "done" if inner.startswith('<span class="pill done">') else "open"
+        tm = re.search(r"<strong>(.+?)</strong>", inner)
+        title = re.sub(r"<[^>]+>", "", tm.group(1)) if tm else inner[:40]
+        i = "h-" + ids(title)
+        return ('<li id="%s" data-status="%s">%s <a class="permalink" href="#%s" aria-label="קישור לנקודה: %s">#</a></li>'
+                % (i, status, inner, i, esc(title)))
+    items = re.sub(r"<li>(.*?)</li>", li, m.group(3), flags=re.S)
+    total = open_n + done_n
+    bar = f'''<div class="tracker-bar no-print">
+<div class="meter" role="img" aria-label="{done_n} מתוך {total} נקודות הוכרעו"><span style="width:{100 * done_n / total:.1f}%"></span></div>
+<p class="meter-label"><b>{done_n}</b> מתוך {total} הוכרעו במטה או הוסכמו (טעונות אישור) · <b class="signal">{open_n}</b> פתוחות</p>
+<div class="chips" role="group" aria-label="הצגה לפי מצב">
+<button type="button" class="chip" data-show="all" aria-pressed="true"><span class="chip-label">הכול</span><span class="chip-n">{total}</span></button>
+<button type="button" class="chip" data-show="open" aria-pressed="false"><span class="pill open">פתוחות</span><span class="chip-n">{open_n}</span></button>
+<button type="button" class="chip" data-show="done" aria-pressed="false"><span class="pill done">הוכרעו</span><span class="chip-n">{done_n}</span></button>
+</div>
+<div class="ex-search"><label for="tq" class="sr">חיפוש בהכרעות</label><input id="tq" type="search" placeholder="חיפוש בהכרעות: יועץ משפטי, שבת, גיוס…" autocomplete="off" enterkeyhint="search"></div>
+<p class="ex-status" aria-live="polite">מוצגות {total} נקודות.</p>
+</div>'''
+    sec = '<section id="decisions" class="tracker" data-tracker aria-labelledby="%s">%s\n%s\n<ul class="decisions">%s</ul></section>' % (m.group(2), m.group(1), bar, items)
+    return h[:m.start()] + sec + h[m.end():]
+
+
+def build_generic(text, slug, open_n=0, done_n=0):
+    """Document body, plus a side rail and a collapsible table of contents built from its headings."""
     body_md = text.split("\n", 1)[1]
     h = id_headings(md_to_html(body_md))
     mode = "default" if slug in ("letter", "summary", "disputes") else "strict"
-    h = wrap_tables(pills(tags(linkify(h, "constitution.html", mode))))
-    heads = [(i, re.sub(r"<[^>]+>", "", t)) for i, t in re.findall(r'<h2 id="(d-\d+)">(.+?)</h2>', h)]
-    if len(heads) < 4:
-        return "", "", h
-    items = "".join('<li><a href="#%s">%s</a></li>' % (i, t) for i, t in heads)
-    rail = '<nav class="rail" aria-label="תוכן המסמך"><h2>תוכן המסמך</h2><ol>%s</ol></nav>' % items
-    toc = '<details class="toc no-print"><summary>תוכן העניינים</summary><ol>%s</ol></details>' % items
+    h = wrap_tables(docrefs(pills(tags(linkify(h, "constitution.html", mode)))))
+    if slug == "disputes":
+        h = tracker(h, open_n, done_n)
+    rail, toc = rail_toc(h)
     return rail, toc, h
 
 
@@ -492,8 +720,14 @@ def glance(p, extra=None):
     if not tiles:
         return ""
     out = []
+    gpre = "" if p["slug"] == "guidelines" else "guidelines.html"
     for label, value, tg in tiles:
         t = tag_html(tg) if tg else ""
+        # the tiles cite the guidelines' clauses ("(קווי היסוד 3.1)", then "(3.2)") and the constitution's sections ("(ס' 92)")
+        value = text_parts(value, lambda s: re.sub(r"\(((?:קווי היסוד )?)(\d{1,2}\.\d{1,2})\)",
+                                                   lambda m: '(%s<a class="xref" href="%s#g-%s">%s</a>)' % (m.group(1), gpre, m.group(2), m.group(2)) if m.group(2) in GIDS else m.group(0), s))
+        if p["slug"] == "constitution":
+            value = linkify(value, "", "internal")
         out.append('<div class="tile"><span class="tile-label">%s</span><span class="tile-value">%s</span>%s</div>' % (label, value, t))
     return '<section class="glance" aria-labelledby="glance-h"><h2 id="glance-h">במבט אחד</h2><div class="tiles">%s</div></section>' % "".join(out)
 
@@ -550,7 +784,8 @@ def main():
     const_text = (DOCS / "constitution.md").read_text(encoding="utf-8")
     disp_text = (DOCS / "disputes.md").read_text(encoding="utf-8")
     secs, chapters = load_sections(const_text)
-    refmap, disp_heads = disputes_index(disp_text)
+    refmap, gmap, disp_heads = disputes_index(disp_text)
+    clauses = load_clauses((DOCS / "guidelines.md").read_text(encoding="utf-8"))
     open_n = disp_text.count("- [ ] ")
     done_n = disp_text.count("- [x] ")
 
@@ -567,19 +802,28 @@ def main():
         text = (DOCS / p["md"]).read_text(encoding="utf-8")
         title = p["title"] or doc_title(text)
         head = page_head(p, title, dispute_href(p.get("dispute")))
+        script = '<div class="toast" id="toast" role="status"></div><script src="assets/app.js" defer></script>'
         if slug == "constitution":
             rail, toc, explorer, h, ah = build_constitution(text, secs, chapters, refmap)
-            body = (f'{head}<main class="wrap page-main">{glance(p)}<div class="doc-layout">{rail}'
-                    f'<article class="doc legal">{toc}{explorer}{h}{ah}</article></div>{chapter_nav(slug)}</main>'
-                    '<div class="toast" id="toast" role="status" hidden></div><script src="assets/app.js" defer></script>')
+            inner = (f'{glance(p)}<div class="doc-layout">{rail}'
+                     f'<article class="doc legal" data-explorer>{toc}{explorer}{h}{ah}</article></div>{chapter_nav(slug)}')
+        elif slug == "guidelines":
+            explorer, h = build_guidelines(text, clauses, gmap)
+            rail, toc = rail_toc(h, nested=True)
+            inner = (f'{glance(p)}<div class="doc-layout">{rail}'
+                     f'<article class="doc guide" data-explorer>{toc}{explorer}{h}</article></div>{chapter_nav(slug)}')
         else:
-            rail, toc, h = build_generic(text, slug)
+            rail, toc, h = build_generic(text, slug, open_n, done_n)
             extra = None
             if slug == "disputes":
-                extra = [("פתוחות", "%d נקודות להכרעת ראשי המפלגות" % open_n, ""), ("סגורות", "%d נקודות שהוכרעו במטה או הוסכמו בין הנציגים" % done_n, ""),
+                extra = [("פתוחות", '<a href="disputes.html?show=open#decisions">%d נקודות להכרעת ראשי המפלגות</a>' % open_n, ""),
+                         ("הוכרעו", '<a href="disputes.html?show=done#decisions">%d נקודות שהוכרעו במטה או הוסכמו בין הנציגים — טעונות אישור</a>' % done_n, ""),
                          ("לכל נקודה", "ברירת המחדל, עמדת כל מפלגה והחלופות", "")]
             layout = f'<div class="doc-layout">{rail}<article class="doc">{toc}{h}</article></div>' if rail else f'<div class="doc-layout single"><article class="doc">{h}</article></div>'
-            body = f'{head}<main class="wrap page-main">{glance(p, extra)}{layout}{chapter_nav(slug)}</main>'
+            inner = f'{glance(p, extra)}{layout}{chapter_nav(slug)}'
+            if slug != "disputes":
+                script = ""
+        body = f'<main id="content" tabindex="-1">{head}<div class="wrap page-main">{inner}</div></main>{script}'
         write(slug + ".html", shell(title, body, slug, p["lede"]))
 
     redirect("laws.html", "index.html#chapters", "חמשת פרקי הליבה")
@@ -609,21 +853,21 @@ def main():
         ("4/4", "ארבע המפלגות"), ("3+", "שלוש, והרביעית ללא עמדה ואינה מתנגדת"), ("צר", "מכנה משותף צר; החלופות במסמך המחלוקות"),
         ("גישור", "נוסח של המטה שנדרש כדי שהסעיף יעבוד"), ("סטטוס קוו", "אין עמדה מפלגתית; הדין הקיים"), ("הוכרע במטה", "הכרעה של כותבי הטיוטה; טעונה אישור ראשי המפלגות")])
     open_list = "".join("<li>%s</li>" % linkify(esc(i), "constitution.html") for i in open_items)
-    home = f'''<section class="hero"><div class="wrap hero-grid">
+    home = f'''<main id="content" tabindex="-1"><section class="hero"><div class="wrap hero-grid">
 <div class="hero-text"><span class="kicker">טיוטה עצמאית לדיון · {TODAY}</span>
 <h1>קווי היסוד<br>לממשלה הבאה</h1>
 <p>טיוטה עצמאית למשימה שמסמך העקרונות של ראשי מפלגות התיקון והתקווה הטיל על קבוצה ב'. היא אינה מטעם המפלגות ולא אושרה על ידן. כל סעיף נוסח מתוך העמדות הפומביות של ביחד, ישראל ביתנו, הדמוקרטים וישר! בלבד, ולכל סעיף יש מקור.</p>
 <div class="actions"><a class="btn btn-sky" href="guidelines.html">לקווי היסוד</a><a class="btn btn-ghost" href="letter.html">למכתב ההסבר</a></div></div>
 <figure class="mandate"><span class="kicker">המנדט</span><blockquote>"{mandate}"</blockquote><figcaption>מסמך העקרונות של ראשי מפלגות התיקון והתקווה, 26.9.2026</figcaption></figure>
 </div><div class="wrap">{stripe()}</div></section>
-<main class="wrap home">
+<div class="wrap home">
 <div class="facts">
-<div class="fact"><b>{guide_n}</b><span>סעיפים בקווי היסוד</span></div>
-<div class="fact"><b>{len(secs)}</b><span>סעיפים בחוקה</span></div>
-<div class="fact"><b>3</b><span>נוסחים משפטיים: שתי הצעות חוק והחלטת ממשלה</span></div>
-<div class="fact"><b>{actions_n}</b><span>פעולות בתוכנית 100 הימים</span></div>
-<div class="fact"><b>{done_n}</b><span>הכרעות שכבר התקבלו</span></div>
-<div class="fact open"><b>{open_n}</b><span>פתוחות להכרעת ראשי המפלגות</span></div>
+<a class="fact" href="guidelines.html"><b>{guide_n}</b><span>סעיפים בקווי היסוד</span></a>
+<a class="fact" href="constitution.html"><b>{len(secs)}</b><span>סעיפים בחוקה</span></a>
+<a class="fact" href="#chapters"><b>3</b><span>נוסחים משפטיים: שתי הצעות חוק והחלטת ממשלה</span></a>
+<a class="fact" href="100-days.html"><b>{actions_n}</b><span>פעולות בתוכנית 100 הימים</span></a>
+<a class="fact" href="disputes.html?show=done#decisions"><b>{done_n}</b><span>נקודות שהוכרעו במטה או הוסכמו — טעונות אישור ראשי המפלגות</span></a>
+<a class="fact open" href="disputes.html?show=open#decisions"><b>{open_n}</b><span>פתוחות להכרעת ראשי המפלגות</span></a>
 </div>
 <section class="home-sec" aria-labelledby="frame-h">
 <div class="sec-head"><span class="kicker">המסגרת</span><h2 id="frame-h">קווי היסוד לממשלת התיקון</h2></div>
@@ -650,15 +894,15 @@ def main():
 <section class="home-sec open-panel" aria-labelledby="open-h">
 <div class="open-intro"><span class="kicker signal">מה נשאר פתוח</span><h2 id="open-h">להכרעת ראשי המפלגות</h2>
 <p class="muted">לכל נקודה נרשמו ברירת המחדל, עמדת כל מפלגה והחלופות.</p>
-<div class="counters"><div class="counter open"><b>{open_n}</b><span>נקודות פתוחות</span></div><div class="counter done"><b>{done_n}</b><span>נקודות סגורות</span></div></div>
-<a class="btn btn-ink" href="disputes.html">למסמך המחלוקות</a></div>
+<div class="counters"><a class="counter open" href="disputes.html?show=open#decisions"><b>{open_n}</b><span>נקודות פתוחות</span></a><a class="counter done" href="disputes.html?show=done#decisions"><b>{done_n}</b><span>הוכרעו או הוסכמו (טעונות אישור)</span></a></div>
+<a class="btn btn-ink" href="disputes.html#decisions">לרשימת ההכרעות</a></div>
 <div class="open-list"><span class="label">העיקריות</span><ul>{open_list}</ul></div>
 </section>
 <section class="home-sec about" aria-label="על המסמכים">
 <div><h2>על המסמכים</h2><p>איך נוסחו, מי בדק אותם ומה הלאה — במכתב ההסבר, בשפה לא משפטית.</p><a href="letter.html">למכתב ההסבר ←</a></div>
 <div><h2>מה זה לא</h2><p>לא מסמך מטעם המפלגות ולא נוסח סופי. אין לאתר קשר לביחד, לישראל ביתנו, לדמוקרטים או לישר!, והוא לא אושר על ידן. ההכרעות שמסומנות "הוכרע במטה" הן הכרעות של כותבי הטיוטה, וכולן טעונות אישור ראשי המפלגות. חלק מהעמדות לקוח מתשובות לשאלוני עיתונים ומראיונות; כל ציטוט מובא עם הדובר, המקור והתאריך.</p></div>
 </section>
-</main>'''
+</div></main>'''
     write("index.html", shell("קווי היסוד לממשלה הבאה — טיוטה עצמאית", home, "index",
                               "קווי היסוד לממשלה הבאה: החוקה, ועדת החקירה, חוק השוויון בנטל, הגבלת הכהונה ותוכנית 100 הימים — נוסחו מעמדות ביחד, ישראל ביתנו, הדמוקרטים וישר!"))
     print("built: index +", ", ".join(p["slug"] for p in PAGES), "| open:", open_n, "done:", done_n, "| clauses:", guide_n, "| open items:", len(open_items))
