@@ -5,7 +5,7 @@ import markdown
 
 ROOT = pathlib.Path(__file__).parent
 DOCS = ROOT / "docs"
-TODAY = "1.10.2026"
+TODAY = "2.10.2026"
 
 # The home page is the summary of Group B's work, in the order of the mandate:
 # the guidelines as the frame, then their five core chapters, each with its own page.
@@ -41,7 +41,7 @@ PAGES = [
                  ("מתי", "ההצעה הראשונה שהממשלה מניחה; השלמה במושב הראשון (5.4)", "הוכרע במטה")]),
     dict(slug="deferral-decision", md="deferral-decision.md", label="ההכרעה על היקף הדחייה", title=None, parent="equal-burden",
          kind="מסמך הכרעה לחוק השוויון בנטל", dispute="חוק השוויון בנטל", pdf="הכרעה-היקף-הדחייה.pdf",
-         lede="תוצאות המשא ומתן בין נציגי ארבע המפלגות: הנוסח המוסכם, ההכרעה בדחייה בשל לימוד תורה ומצוינות, החלופות שנרשמו והאישורים החסרים.",
+         lede="תוצאות המשא ומתן בין ארבעת נציגי המטה, נציג לכל מפלגה: הנוסח המוסכם, ההכרעה בדחייה בשל לימוד תורה ומצוינות, החלופות שנרשמו והאישורים החסרים.",
          glance=[("התוצאה", "אין דחייה בשל לימוד או הישגים; לימוד תורה במסלול בתוך השירות", "4/4, גישור"),
                  ("הדרך", "שישה סבבי משא ומתן, נציג מטה לכל מפלגה", ""),
                  ("מעמד", "הצעת מטה; טעונה אישור ראשי המפלגות", "")]),
